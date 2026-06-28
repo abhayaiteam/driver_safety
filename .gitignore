@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Models (large binaries — store in cloud / model registry)
+*.pt
+*.tflite
+*.onnx
+
+# Generated data — never commit
+evidence/
+review/
+false_detections/
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# Test media
+*.mp4
+*.avi
+*.mov
+1.png
+
+# IDE
+.vscode/
+.idea/
+*.swp

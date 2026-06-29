@@ -241,6 +241,10 @@ def main():
         for (x1, y1, x2, y2, conf, class_id) in detections:
             class_name = CLASS_NAMES[class_id] if class_id < len(CLASS_NAMES) else str(class_id)
             activity   = args.activity or VLM_ACTIVITY.get(class_name, class_name)
+
+            # If --activity is specified, skip all other classes
+            if args.activity and VLM_ACTIVITY.get(class_name, class_name) != args.activity:
+                continue
             now        = time.time()
 
             if args.show:

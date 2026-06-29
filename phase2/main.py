@@ -48,6 +48,8 @@ X-API-Key: <your-key>
 | `cigarette` | Driver smoking |
 | `drowsy` | Driver showing signs of drowsiness |
 | `distracted` | Driver looking away from road |
+| `food` | Driver eating |
+| `drink` | Driver drinking |
 """,
     contact={"name": "Driver Safety Team", "email": "abhay.a@ngxptechnologies.com"},
     license_info={"name": "Private"},

@@ -19,7 +19,7 @@ from models import ErrorResponse, HealthResponse, VerifyJsonRequest, VerifyRespo
 log = logging.getLogger("phase2.router")
 
 API_VERSION      = "2.0.0"
-VALID_ACTIVITIES = {"phone", "cigarette", "drowsy", "distracted"}
+VALID_ACTIVITIES = {"phone", "cigarette", "drowsy", "distracted", "food", "drink"}
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
 

@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env           # all secrets live here — never committed to git
+    volumes:
+      - api_data:/data # persists events.db, logs, evidence, crops
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # lets container reach Ollama on host
+
+volumes:
+  api_data:

@@ -23,16 +23,18 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import requests as _requests
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
 
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from cloud.vlm import verify as _vlm_verify
-from config import cfg
+sys.path.insert(0, str(Path(__file__).parent))
+from vlm import verify as _vlm_verify    # phase2/vlm.py
+from config import cfg                   # phase2/config.py
 
-from phase2.models import (
+from models import (
     ErrorResponse,
     HealthResponse,
     StatsResponse,
@@ -107,6 +109,40 @@ def _persist(event_id: str, driver_id: str, activity: str, bucket: str,
     )
     conn.commit()
     conn.close()
+
+    if bucket == "alert":
+        _send_alert(event_id, driver_id, activity, vlm_conf, reason)
+
+
+def _send_alert(event_id: str, driver_id: str, activity: str, vlm_conf: float, reason: str) -> None:
+    """POST the verified alert to the mobile team's backend webhook."""
+    url = cfg.ALERT_WEBHOOK_URL
+    if not url:
+        log.debug("ALERT_WEBHOOK_URL not configured — skipping push")
+        return
+
+    headers = {"Content-Type": "application/json"}
+    if cfg.ALERT_WEBHOOK_TOKEN:
+        headers["Authorization"] = f"Bearer {cfg.ALERT_WEBHOOK_TOKEN}"
+
+    payload = {
+        "event_id":       event_id,
+        "device_id":      driver_id,   # matches their deviceTabletId field
+        "activity":       activity,
+        "confidence":     round(vlm_conf, 2),
+        "reason":         reason,
+        "source":         "driver_safety_ai",
+        "timestamp":      time.time(),
+    }
+
+    try:
+        resp = _requests.post(url, json=payload, headers=headers, timeout=5)
+        resp.raise_for_status()
+        log.info("ALERT_PUSH event=%s device=%s activity=%s status=%s",
+                 event_id, driver_id, activity, resp.status_code)
+    except Exception as exc:
+        log.error("ALERT_PUSH failed event=%s device=%s err=%s", event_id, driver_id, exc)
+
 
 # ── Shared response builder ───────────────────────────────────────────────────
 

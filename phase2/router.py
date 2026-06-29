@@ -114,25 +114,52 @@ def _persist(event_id: str, driver_id: str, activity: str, bucket: str,
         _send_alert(event_id, driver_id, activity, vlm_conf, reason)
 
 
+def _lookup_driver(device_tablet_id: str) -> dict:
+    """
+    GET https://proximity-driver-api.prod-app.in/api/drivers/by-device/{deviceTabletId}
+    Returns driver info dict, or empty dict on any error.
+    """
+    url = f"{cfg.MOBILE_API_BASE_URL}{cfg.DRIVER_LOOKUP_PATH}/{device_tablet_id}"
+    headers = {}
+    if cfg.MOBILE_API_KEY:
+        headers["Authorization"] = f"Bearer {cfg.MOBILE_API_KEY}"
+    try:
+        resp = _requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        info = resp.json()
+        log.debug("DRIVER_LOOKUP device=%s → %s", device_tablet_id, info)
+        return info if isinstance(info, dict) else {}
+    except Exception as exc:
+        log.warning("DRIVER_LOOKUP failed device=%s err=%s", device_tablet_id, exc)
+        return {}
+
+
 def _send_alert(event_id: str, driver_id: str, activity: str, vlm_conf: float, reason: str) -> None:
-    """POST the verified alert to the mobile team's backend webhook."""
+    """
+    1. Look up driver details from proximity-driver-api using the deviceTabletId.
+    2. POST enriched alert to the mobile team's alert webhook.
+    """
     url = cfg.ALERT_WEBHOOK_URL
     if not url:
         log.debug("ALERT_WEBHOOK_URL not configured — skipping push")
         return
+
+    # Enrich with driver info from their backend
+    driver_info = _lookup_driver(driver_id)
 
     headers = {"Content-Type": "application/json"}
     if cfg.ALERT_WEBHOOK_TOKEN:
         headers["Authorization"] = f"Bearer {cfg.ALERT_WEBHOOK_TOKEN}"
 
     payload = {
-        "event_id":       event_id,
-        "device_id":      driver_id,   # matches their deviceTabletId field
-        "activity":       activity,
-        "confidence":     round(vlm_conf, 2),
-        "reason":         reason,
-        "source":         "driver_safety_ai",
-        "timestamp":      time.time(),
+        "event_id":        event_id,
+        "device_id":       driver_id,          # matches their deviceTabletId field
+        "driver":          driver_info,         # full driver object from their /by-device API
+        "activity":        activity,
+        "confidence":      round(vlm_conf, 2),
+        "reason":          reason,
+        "source":          "driver_safety_ai",
+        "timestamp":       time.time(),
     }
 
     try:

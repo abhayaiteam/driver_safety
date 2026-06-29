@@ -21,11 +21,14 @@ class Config:
     ALERT_COOLDOWN_SEC:  float = float(os.getenv("ALERT_COOLDOWN_SEC",  "5.0"))
     DEDUP_COOLDOWN_SEC:  float = float(os.getenv("DEDUP_COOLDOWN_SEC",  "5.0"))
 
-    # ── Alert webhook (mobile team's backend) ────────────────────────────────
-    # Set ALERT_WEBHOOK_URL to the mobile backend endpoint that receives alerts.
-    # e.g. https://their-backend.com/api/safety-alerts
+    # ── Mobile team's backend (proximity-driver-api) ─────────────────────────
+    MOBILE_API_BASE_URL:  str = os.getenv("MOBILE_API_BASE_URL", "https://proximity-driver-api.prod-app.in")
+    MOBILE_API_KEY:       str = os.getenv("MOBILE_API_KEY",      "")   # their API key if required
+    # Driver lookup: GET {MOBILE_API_BASE_URL}/api/drivers/by-device/{deviceTabletId}
+    DRIVER_LOOKUP_PATH:   str = os.getenv("DRIVER_LOOKUP_PATH",  "/api/drivers/by-device")
+    # Alert push: POST to this URL when VLM confirms a detection (ask mobile team for exact path)
     ALERT_WEBHOOK_URL:    str = os.getenv("ALERT_WEBHOOK_URL",   "")
-    ALERT_WEBHOOK_TOKEN:  str = os.getenv("ALERT_WEBHOOK_TOKEN", "")  # Bearer token if they require auth
+    ALERT_WEBHOOK_TOKEN:  str = os.getenv("ALERT_WEBHOOK_TOKEN", "")
 
     # ── Storage ───────────────────────────────────────────────────────────────
     DB_PATH:               str = os.getenv("DB_PATH",              "events.db")

@@ -136,39 +136,46 @@ def _lookup_driver(device_tablet_id: str) -> dict:
 
 def _send_alert(event_id: str, driver_id: str, activity: str, vlm_conf: float, reason: str) -> None:
     """
-    1. Look up driver details from proximity-driver-api using the deviceTabletId.
-    2. POST enriched alert to the mobile team's alert webhook.
+    POST a confirmed incident to proximity-driver-api POST /api/incidents.
+    Only called when VLM returns verified=True (bucket='alert').
+    Uses the exact schema from their Swagger spec.
     """
-    url = cfg.ALERT_WEBHOOK_URL
-    if not url:
-        log.debug("ALERT_WEBHOOK_URL not configured — skipping push")
-        return
-
-    # Enrich with driver info from their backend
-    driver_info = _lookup_driver(driver_id)
+    url = f"{cfg.MOBILE_API_BASE_URL}/api/incidents"
 
     headers = {"Content-Type": "application/json"}
-    if cfg.ALERT_WEBHOOK_TOKEN:
-        headers["Authorization"] = f"Bearer {cfg.ALERT_WEBHOOK_TOKEN}"
+    if cfg.MOBILE_API_KEY:
+        headers["Authorization"] = f"Bearer {cfg.MOBILE_API_KEY}"
 
+    # Map our activity names to their eventType values
+    event_type_map = {
+        "phone":     "PHONE_USAGE",
+        "cigarette": "SMOKING",
+        "food":      "EATING",
+        "drink":     "DRINKING",
+    }
+
+    from datetime import datetime, timezone
     payload = {
-        "event_id":        event_id,
-        "device_id":       driver_id,          # matches their deviceTabletId field
-        "driver":          driver_info,         # full driver object from their /by-device API
-        "activity":        activity,
-        "confidence":      round(vlm_conf, 2),
-        "reason":          reason,
-        "source":          "driver_safety_ai",
-        "timestamp":       time.time(),
+        "deviceTabletId": driver_id,                          # their IMEI field
+        "eventType":      event_type_map.get(activity, activity.upper()),
+        "riskLevel":      "HIGH",
+        "aiConfidence":   round(vlm_conf, 2),
+        "occurredAt":     datetime.now(timezone.utc).isoformat(),
+        "snapshotUrl":    None,   # no URL — frame was verified in-memory
+        "videoClipUrl":   None,
+        "vehicleSpeed":   None,
+        "gpsLatitude":    None,
+        "gpsLongitude":   None,
+        "driverId":       None,   # mobile team can join via deviceTabletId
     }
 
     try:
         resp = _requests.post(url, json=payload, headers=headers, timeout=5)
         resp.raise_for_status()
-        log.info("ALERT_PUSH event=%s device=%s activity=%s status=%s",
+        log.info("INCIDENT_CREATED event=%s device=%s activity=%s status=%s",
                  event_id, driver_id, activity, resp.status_code)
     except Exception as exc:
-        log.error("ALERT_PUSH failed event=%s device=%s err=%s", event_id, driver_id, exc)
+        log.error("INCIDENT_CREATE failed event=%s device=%s err=%s", event_id, driver_id, exc)
 
 
 # ── Shared response builder ───────────────────────────────────────────────────

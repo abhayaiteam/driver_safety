@@ -19,7 +19,9 @@ _PROMPTS: dict[str, str] = {
         "A phone held to the ear, in hand while texting, or mounted but being actively touched counts as YES. "
         "An empty hand, steering wheel grip, or hand on gear shift counts as NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true_or_false, "confidence": 0.0_to_1.0, "reason": "one concise sentence"}'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
     "cigarette": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -28,7 +30,32 @@ _PROMPTS: dict[str, str] = {
         "Smoke visible, cigarette between fingers or lips counts as YES. "
         "No smoke or cigarette visible counts as NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true_or_false, "confidence": 0.0_to_1.0, "reason": "one concise sentence"}'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+    ),
+    "drowsy": (
+        "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
+        "Look carefully at the driver's eyes and head position.\n\n"
+        "Question: Is the driver showing signs of drowsiness or falling asleep right now? "
+        "Eyes closed or heavily drooping, head tilting/nodding down counts as YES. "
+        "Eyes open and alert, normal head position counts as NO.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+    ),
+    "distracted": (
+        "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
+        "Look carefully at the driver's gaze direction and head orientation.\n\n"
+        "Question: Is the driver looking away from the road ahead right now? "
+        "Head turned sideways, looking down at lap or phone, or facing away from windshield counts as YES. "
+        "Eyes facing forward toward the road counts as NO. "
+        "Note: briefly glancing at mirrors is normal driving and counts as NO.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
     "food": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -37,7 +64,9 @@ _PROMPTS: dict[str, str] = {
         "Food item in hand, at mouth, or chewing motion counts as YES. "
         "Empty hands or no food visible counts as NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true_or_false, "confidence": 0.0_to_1.0, "reason": "one concise sentence"}'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
     "drink": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -46,7 +75,9 @@ _PROMPTS: dict[str, str] = {
         "Container raised toward mouth or drinking motion counts as YES. "
         "No container visible or hands on wheel counts as NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true_or_false, "confidence": 0.0_to_1.0, "reason": "one concise sentence"}'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
 }
 
@@ -95,10 +126,16 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
         if result:
             return result
 
+        # JSON parse failed — LLaVA returned plain text instead
+        # Detect negations to determine if the activity was present or not
         lower = raw.lower()
-        verified = "true" in lower and "false" not in lower
-        log.warning("VLM JSON parse failed for '%s', using heuristic. raw=%s", activity, raw[:120])
-        return {"verified": verified, "confidence": 0.5, "reason": raw[:120]}
+        negations = ["not ", "no ", "doesn't", "isn't", "cannot", "can't", "do not", "without", "absent"]
+        has_negation = any(n in lower for n in negations)
+        verified = not has_negation
+        confidence = 0.3 if has_negation else 0.7
+        log.warning("VLM JSON parse failed for '%s', using heuristic verified=%s. raw=%s",
+                    activity, verified, raw[:120])
+        return {"verified": verified, "confidence": confidence, "reason": raw[:120]}
 
     except (ResponseError, ConnectionError, TimeoutError, ValueError) as exc:
         log.error("VLM call failed for '%s': %s", activity, exc)

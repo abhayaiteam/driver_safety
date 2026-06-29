@@ -16,6 +16,7 @@ Environment variables:
     LOG_FILE  — rotating log file path (default: logs/driver_safety.log)
 """
 
+import asyncio
 import logging
 import logging.handlers
 import os
@@ -29,8 +30,9 @@ from fastapi.middleware.cors import CORSMiddleware
 # ── Path setup: works whether invoked as `phase2.main` or bare `main` ─────────
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import cfg       # phase2/config.py
-from router import router    # phase2/router.py
+from config import cfg          # phase2/config.py
+from router import router      # phase2/router.py
+from worker import run_worker  # phase2/worker.py
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -149,7 +151,14 @@ async def _startup() -> None:
     log.info("  API key    : %s%s", key[:4], "*" * (len(key) - 4))
     log.info("  DB         : %s", cfg.DB_PATH)
     log.info("  Docs       : http://0.0.0.0:8001/docs")
+    if cfg.INCIDENT_LIST_PATH:
+        log.info("  Worker     : polling %s%s every %ss",
+                 cfg.MOBILE_API_BASE_URL, cfg.INCIDENT_LIST_PATH,
+                 os.getenv("POLL_INTERVAL_SEC", "10"))
     log.info("=" * 60)
+
+    # Start background incident verification worker
+    asyncio.create_task(run_worker())
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────

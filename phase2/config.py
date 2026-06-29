@@ -30,6 +30,13 @@ class Config:
     ALERT_WEBHOOK_URL:    str = os.getenv("ALERT_WEBHOOK_URL",   "")
     ALERT_WEBHOOK_TOKEN:  str = os.getenv("ALERT_WEBHOOK_TOKEN", "")
 
+    # ── Incident worker (polls mobile backend, verifies, updates) ─────────────
+    # GET  {MOBILE_API_BASE_URL}{INCIDENT_LIST_PATH}?status=pending  → list of incidents
+    # PATCH {MOBILE_API_BASE_URL}{INCIDENT_UPDATE_PATH}/{id}         → update verdict
+    # Ask mobile team for the exact paths below
+    INCIDENT_LIST_PATH:   str = os.getenv("INCIDENT_LIST_PATH",   "")   # e.g. /api/incidents
+    INCIDENT_UPDATE_PATH: str = os.getenv("INCIDENT_UPDATE_PATH", "")   # e.g. /api/incidents
+
     # ── Storage ───────────────────────────────────────────────────────────────
     DB_PATH:               str = os.getenv("DB_PATH",              "events.db")
     LOG_FILE:              str = os.getenv("LOG_FILE",             "logs/driver_safety.log")

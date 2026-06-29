@@ -117,7 +117,7 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
                 "content": prompt,
                 "images":  [image_b64],
             }],
-            options={"temperature": 0.0, "num_predict": 100},
+            options={"temperature": 0.0, "num_predict": 60},
         )
         raw = response["message"]["content"].strip()
         log.debug("VLM raw response for '%s': %s", activity, raw[:200])

@@ -5,6 +5,8 @@ services:
       - "8030:8001"
     env_file:
       - .env           # all secrets live here — never committed to git
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
     volumes:
       - api_data:/data # persists events.db, logs, evidence, crops
     restart: unless-stopped

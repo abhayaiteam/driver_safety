@@ -19,7 +19,22 @@ from models import ErrorResponse, HealthResponse, VerifyJsonRequest, VerifyRespo
 log = logging.getLogger("phase2.router")
 
 API_VERSION      = "2.0.0"
-VALID_ACTIVITIES = {"phone", "cigarette", "drowsy", "distracted", "food", "drink"}
+
+# Only object-detection (YOLO) activities need a VLM double-check here — face/drowsiness
+# detection, unauthorized-driver, and hardware events are verified elsewhere and are not
+# this service's concern, so they're passed straight through to the backend untouched.
+# The app sends free-text labels (e.g. "phone being used", not just "phone"), so match by
+# keyword rather than exact string.
+_OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
+    "phone":     "phone",
+    "cigarette": "cigarette",
+    "smoking":   "cigarette",
+    "smoke":     "cigarette",
+    "eating":    "food",
+    "food":      "food",
+    "drinking":  "drink",
+    "drink":     "drink",
+}
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
 
@@ -39,6 +54,29 @@ async def _run_verify(activity: str, image_b64: str) -> dict:
     return await loop.run_in_executor(_executor, _vlm_verify, activity, image_b64, cfg.VLM_MODEL)
 
 
+def _resolve_object_detection_activity(activity: str) -> Optional[str]:
+    """Map a free-text activity label to a VLM prompt key (phone/cigarette/food/drink)
+    if it's an object-detection activity; None for anything else (drowsiness,
+    distraction, unauthorized driver, hardware events, ...)."""
+    lowered = activity.strip().lower()
+    for keyword, canonical in _OBJECT_DETECTION_KEYWORDS.items():
+        if keyword in lowered:
+            return canonical
+    return None
+
+
+def _pass_through(activity: str, driver_id: str) -> VerifyResponse:
+    """Non object-detection activities skip the VLM double-check and are accepted as-is."""
+    log.info("VERIFY driver=%s activity=%s verified=True (pass-through, no VLM check)",
+              driver_id, activity)
+    return VerifyResponse(
+        verified=True,
+        confidence=1.0,
+        activity=activity,
+        reason="Not an object-detection activity — passed through without VLM check.",
+    )
+
+
 @router.post(
     "/verify/upload",
     response_model=VerifyResponse,
@@ -48,18 +86,19 @@ async def _run_verify(activity: str, image_b64: str) -> dict:
 )
 async def verify_upload(
     file:      UploadFile = File(..., description="JPEG/PNG of the driver crop"),
-    activity:  str        = Form(..., description="phone | cigarette | drowsy | distracted"),
+    activity:  str        = Form(..., description="Object-detection activity label, e.g. 'phone being used'"),
     driver_id: str        = Form(default="unknown"),
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
-    if activity not in VALID_ACTIVITIES:
-        raise HTTPException(status_code=422, detail=f"activity must be one of {sorted(VALID_ACTIVITIES)}")
+    canonical = _resolve_object_detection_activity(activity)
+    if canonical is None:
+        return _pass_through(activity, driver_id)
 
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
 
-    result = await _run_verify(activity, base64.b64encode(raw).decode())
+    result = await _run_verify(canonical, base64.b64encode(raw).decode())
     verified = result["verified"] and result["confidence"] >= cfg.VLM_ALERT_THRESHOLD
 
     log.info("VERIFY driver=%s activity=%s verified=%s conf=%.2f reason=%r",
@@ -84,10 +123,11 @@ async def verify_json(
     body: VerifyJsonRequest,
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
-    if body.activity not in VALID_ACTIVITIES:
-        raise HTTPException(status_code=422, detail=f"activity must be one of {sorted(VALID_ACTIVITIES)}")
+    canonical = _resolve_object_detection_activity(body.activity)
+    if canonical is None:
+        return _pass_through(body.activity, body.driver_id)
 
-    result = await _run_verify(body.activity, body.image_b64)
+    result = await _run_verify(canonical, body.image_b64)
     verified = result["verified"] and result["confidence"] >= cfg.VLM_ALERT_THRESHOLD
 
     log.info("VERIFY driver=%s activity=%s verified=%s conf=%.2f reason=%r",

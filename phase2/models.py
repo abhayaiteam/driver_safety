@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class VerifyJsonRequest(BaseModel):
     image_b64: str = Field(..., description="Base64-encoded JPEG/PNG of the driver crop")
-    activity: str = Field(..., description="phone | cigarette | drowsy | distracted")
+    activity: str = Field(..., description="Object-detection activity label, e.g. 'phone being used'")
     driver_id: Optional[str] = Field(default="unknown")
     det_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 

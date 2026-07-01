@@ -34,29 +34,6 @@ _PROMPTS: dict[str, str] = {
         'or\n'
         '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
-    "drowsy": (
-        "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
-        "Look carefully at the driver's eyes and head position.\n\n"
-        "Question: Is the driver showing signs of drowsiness or falling asleep right now? "
-        "Eyes closed or heavily drooping, head tilting/nodding down counts as YES. "
-        "Eyes open and alert, normal head position counts as NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
-        'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
-    ),
-    "distracted": (
-        "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
-        "Look carefully at the driver's gaze direction and head orientation.\n\n"
-        "Question: Is the driver looking away from the road ahead right now? "
-        "Head turned sideways, looking down at lap or phone, or facing away from windshield counts as YES. "
-        "Eyes facing forward toward the road counts as NO. "
-        "Note: briefly glancing at mirrors is normal driving and counts as NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
-        'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
-    ),
     "food": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
         "Look carefully at the driver's hands and mouth area.\n\n"

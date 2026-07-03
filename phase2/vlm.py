@@ -67,6 +67,23 @@ _PROMPTS: dict[str, str] = {
         'or\n'
         '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
+    "seatbelt": (
+        "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera, "
+        "possibly from an angled, side, or partially obstructed view. Scan the driver's entire "
+        "chest, shoulder, and lap area for any sign of a seatbelt — a diagonal strap, webbing, "
+        "or buckle. At an angle, the strap can look thin, faint, low-contrast against clothing, "
+        "or partially cut off by the crop — look carefully before concluding it's absent.\n\n"
+        "Question: Is the driver NOT wearing a seatbelt right now? "
+        "Answer YES (violation, not wearing) only if no strap, webbing, or buckle is visible "
+        "anywhere across the chest, shoulder, or lap. "
+        "If ANY part of a strap or buckle is visible — even faint, partial, or at an unusual "
+        "angle — answer NO (belt is worn); it is better to miss a real violation than to "
+        "falsely flag a driver who is already wearing their seatbelt.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
+        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        'or\n'
+        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+    ),
 }
 
 

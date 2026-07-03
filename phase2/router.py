@@ -38,6 +38,9 @@ _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "drowsy":     "drowsy",
     "drowsiness": "drowsy",
     "sleepy":     "drowsy",
+    "seatbelt":   "seatbelt",
+    "seat belt":  "seatbelt",
+    "seat_belt":  "seatbelt",
 }
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
@@ -59,7 +62,7 @@ async def _run_verify(activity: str, image_b64: str) -> dict:
 
 
 def _resolve_object_detection_activity(activity: str) -> Optional[str]:
-    """Map a free-text activity label to a VLM prompt key (phone/cigarette/food/drink/drowsy)
+    """Map a free-text activity label to a VLM prompt key (phone/cigarette/food/drink/drowsy/seatbelt)
     if it needs a VLM double-check; None for anything else (distraction,
     unauthorized driver, hardware events, ...)."""
     lowered = activity.strip().lower()

@@ -20,20 +20,24 @@ log = logging.getLogger("phase2.router")
 
 API_VERSION      = "2.0.0"
 
-# Only object-detection (YOLO) activities need a VLM double-check here — face/drowsiness
-# detection, unauthorized-driver, and hardware events are verified elsewhere and are not
-# this service's concern, so they're passed straight through to the backend untouched.
+# Only object-detection (YOLO) activities plus eye-state drowsiness need a VLM
+# double-check here — unauthorized-driver and hardware events are verified elsewhere
+# and are not this service's concern, so they're passed straight through to the
+# backend untouched.
 # The app sends free-text labels (e.g. "phone being used", not just "phone"), so match by
 # keyword rather than exact string.
 _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
-    "phone":     "phone",
-    "cigarette": "cigarette",
-    "smoking":   "cigarette",
-    "smoke":     "cigarette",
-    "eating":    "food",
-    "food":      "food",
-    "drinking":  "drink",
-    "drink":     "drink",
+    "phone":      "phone",
+    "cigarette":  "cigarette",
+    "smoking":    "cigarette",
+    "smoke":      "cigarette",
+    "eating":     "food",
+    "food":       "food",
+    "drinking":   "drink",
+    "drink":      "drink",
+    "drowsy":     "drowsy",
+    "drowsiness": "drowsy",
+    "sleepy":     "drowsy",
 }
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
@@ -55,9 +59,9 @@ async def _run_verify(activity: str, image_b64: str) -> dict:
 
 
 def _resolve_object_detection_activity(activity: str) -> Optional[str]:
-    """Map a free-text activity label to a VLM prompt key (phone/cigarette/food/drink)
-    if it's an object-detection activity; None for anything else (drowsiness,
-    distraction, unauthorized driver, hardware events, ...)."""
+    """Map a free-text activity label to a VLM prompt key (phone/cigarette/food/drink/drowsy)
+    if it needs a VLM double-check; None for anything else (distraction,
+    unauthorized driver, hardware events, ...)."""
     lowered = activity.strip().lower()
     for keyword, canonical in _OBJECT_DETECTION_KEYWORDS.items():
         if keyword in lowered:

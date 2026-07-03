@@ -58,10 +58,12 @@ _PROMPTS: dict[str, str] = {
     ),
     "drowsy": (
         "This is a cropped image of a vehicle driver's face taken from a dashcam or cabin camera. "
-        "Look carefully at the driver's eyes.\n\n"
-        "Question: Are the driver's eyes closed or nearly closed right now, indicating drowsiness? "
-        "Fully or mostly closed eyelids count as YES (drowsy). "
-        "Open eyes — even if looking away, blinking, or squinting — count as NO (not drowsy).\n\n"
+        "Look carefully and only at the driver's eyelids.\n\n"
+        "Question: Are the driver's eyes fully or almost fully closed right now, indicating drowsiness? "
+        "Answer YES only if the eyelids are clearly shut or nearly shut, covering most of the eye. "
+        "Answer NO for everything else — open eyes, half-open eyes, squinting, a single blink, "
+        "looking down or away, sunglasses, or eyes not clearly visible. "
+        "If you are not certain the eyes are closed, answer NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
         '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
         'or\n'
@@ -69,13 +71,17 @@ _PROMPTS: dict[str, str] = {
     ),
     "seatbelt": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera, "
-        "possibly from an angled, side, or partially obstructed view. Scan the driver's entire "
-        "chest, shoulder, and lap area for any sign of a seatbelt — a diagonal strap, webbing, "
-        "or buckle. At an angle, the strap can look thin, faint, low-contrast against clothing, "
-        "or partially cut off by the crop — look carefully before concluding it's absent.\n\n"
+        "possibly from an angled, side, or partially obstructed view. "
+        "A worn seatbelt looks like a straight or slightly diagonal strap of fabric webbing "
+        "(usually black, grey, or beige, about 5-8 cm wide) running from near one shoulder "
+        "diagonally across the chest down to the opposite hip, sometimes with a metal or "
+        "plastic buckle/latch plate visible where it crosses the body. It often contrasts in "
+        "color or texture with the driver's clothing. At an angle it can look thin, faint, "
+        "low-contrast, or partially cut off by the crop — scan the driver's entire chest, "
+        "shoulder, and lap area carefully before concluding no strap is present.\n\n"
         "Question: Is the driver NOT wearing a seatbelt right now? "
-        "Answer YES (violation, not wearing) only if no strap, webbing, or buckle is visible "
-        "anywhere across the chest, shoulder, or lap. "
+        "Answer YES (violation, not wearing) only if no strap, webbing, or buckle matching that "
+        "description is visible anywhere across the chest, shoulder, or lap. "
         "If ANY part of a strap or buckle is visible — even faint, partial, or at an unusual "
         "angle — answer NO (belt is worn); it is better to miss a real violation than to "
         "falsely flag a driver who is already wearing their seatbelt.\n\n"

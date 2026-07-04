@@ -20,21 +20,15 @@ log = logging.getLogger("phase2.router")
 
 API_VERSION      = "2.0.0"
 
-# Only object-detection (YOLO) activities plus eye-state drowsiness need a VLM
-# double-check here — unauthorized-driver and hardware events are verified elsewhere
-# and are not this service's concern, so they're passed straight through to the
-# backend untouched.
-# The app sends free-text labels (e.g. "phone being used", not just "phone"), so match by
-# keyword rather than exact string.
 _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "phone":      "phone",
     "cigarette":  "cigarette",
     "smoking":    "cigarette",
     "smoke":      "cigarette",
-    "eating":     "food",
-    "food":       "food",
-    "drinking":   "drink",
-    "drink":      "drink",
+    # "eating":     "food",      # disabled — not needed right now
+    # "food":       "food",      # disabled — not needed right now
+    # "drinking":   "drink",     # disabled — not needed right now
+    # "drink":      "drink",     # disabled — not needed right now
     "drowsy":     "drowsy",
     "drowsiness": "drowsy",
     "sleepy":     "drowsy",
@@ -43,10 +37,18 @@ _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "seat_belt":  "seatbelt",
 }
 
-# Canonical activity -> display label shown to the backend/dashboard in the response.
-# Raw labels vary by device ("no_seatbelt", "NO_SEAT_BELT", "seatbelt_not_worn", ...) but
-# should all surface as one consistent alert string. Anything not listed here keeps the
-# caller's original raw label (unchanged behavior for phone/cigarette/food/drink/drowsy).
+# Food/drink detection is temporarily disabled (see commented entries above). Matched
+# labels are suppressed (verified=False) here rather than falling through to
+# _pass_through's default verified=True, so they don't show up as confirmed alerts
+# while disabled. Re-enable by uncommenting the entries above and deleting this block.
+_DISABLED_KEYWORDS = ("eating", "food", "drinking", "drink")
+
+
+def _is_disabled_activity(activity: str) -> bool:
+    lowered = activity.strip().lower()
+    return any(keyword in lowered for keyword in _DISABLED_KEYWORDS)
+
+
 _ACTIVITY_DISPLAY_NAMES: dict[str, str] = {
     "seatbelt": "Seatbelt Not Worn",
 }
@@ -105,6 +107,16 @@ async def verify_upload(
     driver_id: str        = Form(default="unknown"),
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
+    if _is_disabled_activity(activity):
+        log.info("VERIFY driver=%s activity=%s verified=False (food/drink detection disabled)",
+                  driver_id, activity)
+        return VerifyResponse(
+            verified=False,
+            confidence=0.0,
+            activity=activity,
+            reason="Food/drink verification is temporarily disabled.",
+        )
+
     canonical = _resolve_object_detection_activity(activity)
     if canonical is None:
         return _pass_through(activity, driver_id)
@@ -138,6 +150,16 @@ async def verify_json(
     body: VerifyJsonRequest,
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
+    if _is_disabled_activity(body.activity):
+        log.info("VERIFY driver=%s activity=%s verified=False (food/drink detection disabled)",
+                  body.driver_id, body.activity)
+        return VerifyResponse(
+            verified=False,
+            confidence=0.0,
+            activity=body.activity,
+            reason="Food/drink verification is temporarily disabled.",
+        )
+
     canonical = _resolve_object_detection_activity(body.activity)
     if canonical is None:
         return _pass_through(body.activity, body.driver_id)

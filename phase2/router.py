@@ -42,6 +42,14 @@ _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "seat belt":  "seatbelt",
     "seat_belt":  "seatbelt",
 }
+
+# Canonical activity -> display label shown to the backend/dashboard in the response.
+# Raw labels vary by device ("no_seatbelt", "NO_SEAT_BELT", "seatbelt_not_worn", ...) but
+# should all surface as one consistent alert string. Anything not listed here keeps the
+# caller's original raw label (unchanged behavior for phone/cigarette/food/drink/drowsy).
+_ACTIVITY_DISPLAY_NAMES: dict[str, str] = {
+    "seatbelt": "Seatbelt Not Worn",
+}
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
 
@@ -114,7 +122,7 @@ async def verify_upload(
     return VerifyResponse(
         verified=verified,
         confidence=result["confidence"],
-        activity=activity,
+        activity=_ACTIVITY_DISPLAY_NAMES.get(canonical, activity),
         reason=result["reason"],
     )
 
@@ -143,7 +151,7 @@ async def verify_json(
     return VerifyResponse(
         verified=verified,
         confidence=result["confidence"],
-        activity=body.activity,
+        activity=_ACTIVITY_DISPLAY_NAMES.get(canonical, body.activity),
         reason=result["reason"],
     )
 

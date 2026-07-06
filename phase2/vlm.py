@@ -57,13 +57,15 @@ _PROMPTS: dict[str, str] = {
         '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
     ),
     "drowsy": (
-        "This is a cropped image of a vehicle driver's face taken from a dashcam or cabin camera. "
-        "Look carefully and only at the driver's eyelids.\n\n"
-        "Question: Are the driver's eyes fully or almost fully closed right now, indicating drowsiness? "
-        "Answer YES only if the eyelids are clearly shut or nearly shut, covering most of the eye. "
-        "Answer NO for everything else — open eyes, half-open eyes, squinting, a single blink, "
-        "looking down or away, sunglasses, or eyes not clearly visible. "
-        "If you are not certain the eyes are closed, answer NO.\n\n"
+        "This is a cropped image of a vehicle driver's face taken from a dashcam or cabin camera.\n\n"
+        "Question: Is this driver showing signs of drowsiness or falling asleep right now? "
+        "Answer YES if you see any of: eyes closed or nearly closed, heavy drooping eyelids, "
+        "the head tilting, nodding, or drooping downward/sideways as if dozing off, or a slack, "
+        "sleepy facial expression. "
+        "Answer NO only if the driver looks clearly alert and awake — eyes open and actively "
+        "looking forward, or just a single quick blink. A brief glance down or sideways while "
+        "still alert also counts as NO. "
+        "If the eyes or head position are not visible at all in the frame, answer NO.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
         '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
         'or\n'

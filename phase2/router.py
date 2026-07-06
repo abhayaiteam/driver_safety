@@ -32,9 +32,11 @@ _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "drowsy":     "drowsy",
     "drowsiness": "drowsy",
     "sleepy":     "drowsy",
-    "seatbelt":   "seatbelt",
-    "seat belt":  "seatbelt",
-    "seat_belt":  "seatbelt",
+    "seatbelt":       "seatbelt",
+    "seat belt":      "seatbelt",
+    "seat_belt":      "seatbelt",
+    "fasten seatbelt": "seatbelt",
+    "buckle":         "seatbelt",
 }
 
 # Food/drink detection is temporarily disabled (see commented entries above). Matched

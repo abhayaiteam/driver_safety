@@ -30,9 +30,13 @@ _PROMPTS: dict[str, str] = {
     "cigarette": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
         "Look carefully at the driver's mouth, lips, and hand area.\n\n"
-        "Question: Is the driver actively smoking a cigarette, cigar, or similar right now? "
-        "Smoke visible, cigarette between fingers or lips counts as YES. "
-        "No smoke or cigarette visible counts as NO.\n\n"
+        "Question: Is the driver actively smoking a cigarette, cigar, bidi, or vape right now? "
+        "Answer YES only if you can clearly identify an actual cigarette/cigar/vape "
+        "(a thin stick or device held at the lips or between fingers near the mouth) or "
+        "visible smoke coming from the mouth or hand. "
+        "Answer NO for an empty hand, a finger, pen, phone, food, or any object that is not "
+        "clearly identifiable as a cigarette/cigar/vape — if you are not certain it is one, "
+        "answer NO.\n\n"
         "First write down exactly what you observe, then decide based on that.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
         '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'

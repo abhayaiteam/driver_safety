@@ -21,10 +21,11 @@ _PROMPTS: dict[str, str] = {
         "mounted but being actively touched all count as YES. "
         "Answer NO only if no phone is visible at all — empty hand, steering wheel grip, or "
         "hand on gear shift.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
     "cigarette": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -32,10 +33,11 @@ _PROMPTS: dict[str, str] = {
         "Question: Is the driver actively smoking a cigarette, cigar, or similar right now? "
         "Smoke visible, cigarette between fingers or lips counts as YES. "
         "No smoke or cigarette visible counts as NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
     "food": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -43,10 +45,11 @@ _PROMPTS: dict[str, str] = {
         "Question: Is the driver actively eating food right now? "
         "Food item in hand, at mouth, or chewing motion counts as YES. "
         "Empty hands or no food visible counts as NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
     "drink": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
@@ -54,10 +57,11 @@ _PROMPTS: dict[str, str] = {
         "Question: Is the driver actively drinking from a cup, bottle, or can right now? "
         "Container raised toward mouth or drinking motion counts as YES. "
         "No container visible or hands on wheel counts as NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
     "drowsy": (
         "This is a cropped image of a vehicle driver's face taken from a dashcam or cabin camera.\n\n"
@@ -69,10 +73,11 @@ _PROMPTS: dict[str, str] = {
         "looking forward, or just a single quick blink. A brief glance down or sideways while "
         "still alert also counts as NO. "
         "If the eyes or head position are not visible at all in the frame, answer NO.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
     "seatbelt": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera, "
@@ -90,10 +95,11 @@ _PROMPTS: dict[str, str] = {
         "If ANY part of a strap or buckle is visible — even faint, partial, or at an unusual "
         "angle — answer NO (belt is worn); it is better to miss a real violation than to "
         "falsely flag a driver who is already wearing their seatbelt.\n\n"
-        'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
-        '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
+        "First write down exactly what you observe, then decide based on that.\n\n"
+        'Answer ONLY with this exact JSON (no markdown, no extra text), in this field order:\n'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": true, "confidence": 0.95}\n'
         'or\n'
-        '{"verified": false, "confidence": 0.95, "reason": "one concise sentence"}'
+        '{"reason": "one concise sentence describing exactly what you observe", "verified": false, "confidence": 0.95}'
     ),
 }
 
@@ -121,8 +127,10 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
     """
     prompt = _PROMPTS.get(activity) or (
         f"This is a cropped image of a vehicle driver. "
-        f"Is the driver doing '{activity}' right now?\n\n"
-        'Answer ONLY with JSON: {"verified": true_or_false, "confidence": 0.0_to_1.0, "reason": "one sentence"}'
+        f"Is the driver doing '{activity}' right now? First write down exactly what you observe, "
+        f"then decide based on that.\n\n"
+        'Answer ONLY with JSON, in this field order: '
+        '{"reason": "one sentence describing what you observe", "verified": true_or_false, "confidence": 0.0_to_1.0}'
     )
 
     try:
@@ -133,7 +141,7 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
                 "content": prompt,
                 "images":  [image_b64],
             }],
-            options={"temperature": 0.0, "num_predict": 60},
+            options={"temperature": 0.0, "num_predict": 100},
         )
         raw = response["message"]["content"].strip()
         log.debug("VLM raw response for '%s': %s", activity, raw[:200])

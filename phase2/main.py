@@ -26,6 +26,13 @@ def _setup_logging() -> None:
     root.addHandler(fh)
     root.addHandler(sh)
 
+    # Quiet down noisy third-party/framework logs so only our own
+    # VERIFY/startup lines show — httpx logs every outgoing Ollama HTTP
+    # call, and uvicorn's access log prints one line per request.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").disabled = True
+
 
 _setup_logging()
 log = logging.getLogger("phase2.main")

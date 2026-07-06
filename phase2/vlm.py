@@ -15,9 +15,12 @@ _PROMPTS: dict[str, str] = {
     "phone": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera. "
         "Look carefully at the driver's hands, face, and ear area.\n\n"
-        "Question: Is the driver actively holding or using a mobile phone right now? "
-        "A phone held to the ear, in hand while texting, or mounted but being actively touched counts as YES. "
-        "An empty hand, steering wheel grip, or hand on gear shift counts as NO.\n\n"
+        "Question: Is the driver holding or actively using a mobile phone right now, for ANY "
+        "reason — calling, texting, browsing, taking a photo or selfie, or anything else? "
+        "A phone visible in the driver's hand, held to the ear, held up toward the face, or "
+        "mounted but being actively touched all count as YES. "
+        "Answer NO only if no phone is visible at all — empty hand, steering wheel grip, or "
+        "hand on gear shift.\n\n"
         'Answer ONLY with this exact JSON (no markdown, no extra text):\n'
         '{"verified": true, "confidence": 0.95, "reason": "one concise sentence"}\n'
         'or\n'

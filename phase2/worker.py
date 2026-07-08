@@ -32,17 +32,31 @@ log = logging.getLogger("phase2.worker")
 POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "10"))
 
 # eventType values the mobile team might use → map to our VLM prompt keys
+# eventType values the mobile team might use → map to our VLM prompt keys
 _EVENT_TYPE_MAP: dict[str, str] = {
-    "phone":        "phone",
-    "phone_usage":  "phone",
-    "mobile_phone": "phone",
-    "call":         "phone",
-    "smoking":      "cigarette",
-    "cigarette":    "cigarette",
-    "food":         "food",
-    "eating":       "food",
-    "drink":        "drink",
-    "drinking":     "drink",
+    "phone":         "phone",
+    "phone_usage":   "phone",
+    "mobile_phone":  "phone",
+    "mobile":        "phone",
+    "call":          "phone",
+    "texting":       "phone",
+    "smoking":       "cigarette",
+    "cigarette":     "cigarette",
+    "smoke":         "cigarette",
+    "vape":          "cigarette",
+    "vaping":        "cigarette",
+    "food":          "food",
+    "eating":        "food",
+    "drink":         "drink",
+    "drinking":      "drink",
+    "drowsy":        "drowsy",
+    "drowsiness":    "drowsy",
+    "sleepy":        "drowsy",
+    "seatbelt":      "seatbelt",
+    "seat_belt":     "seatbelt",
+    "no_seatbelt":   "seatbelt",
+    "no_seat_belt":  "seatbelt",
+    "buckle":        "seatbelt",
 }
 
 
@@ -149,10 +163,22 @@ async def _process_pending() -> None:
 
     for incident in new_incidents:
         iid          = str(incident["id"])
-        event_type   = (incident.get("eventType") or "phone").lower().replace(" ", "_")
-        activity     = _EVENT_TYPE_MAP.get(event_type, "phone")
+        event_type   = (incident.get("eventType") or "").lower().replace(" ", "_").strip()
+        activity     = _EVENT_TYPE_MAP.get(event_type)
         device       = incident.get("deviceTabletId") or "unknown"
         snapshot_url = incident.get("snapshotUrl")
+
+        if not event_type:
+            log.warning("Worker: incident=%s has no eventType, skipping (left pending)", iid)
+            continue
+
+        if activity is None:
+            # Unmapped event type: do NOT assume phone. Fall back to the strict
+            # generic VLM prompt using the raw label, and flag it in the log so
+            # the map above can be extended.
+            log.warning("Worker: incident=%s has unmapped eventType=%r — using generic "
+                        "strict prompt; add it to _EVENT_TYPE_MAP", iid, event_type)
+            activity = event_type
 
         if not snapshot_url:
             log.warning("Worker: incident=%s has no snapshotUrl, skipping", iid)

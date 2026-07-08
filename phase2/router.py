@@ -22,9 +22,14 @@ API_VERSION      = "2.0.0"
 
 _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "phone":      "phone",
+    "mobile":     "phone",
+    "call":       "phone",
+    "texting":    "phone",
     "cigarette":  "cigarette",
     "smoking":    "cigarette",
     "smoke":      "cigarette",
+    "vape":       "cigarette",
+    "vaping":     "cigarette",
     # "eating":     "food",      # disabled — not needed right now
     # "food":       "food",      # disabled — not needed right now
     # "drinking":   "drink",     # disabled — not needed right now
@@ -85,9 +90,13 @@ def _resolve_object_detection_activity(activity: str) -> Optional[str]:
 
 
 def _pass_through(activity: str, driver_id: str) -> VerifyResponse:
-    """Non object-detection activities skip the VLM double-check and are accepted as-is."""
-    log.info("VERIFY driver=%s activity=%s verified=True (pass-through, no VLM check)",
-              driver_id, activity)
+    """Non object-detection activities skip the VLM double-check and are accepted as-is.
+    Logged as WARNING so anything bypassing verification is always visible in the log —
+    if a label that SHOULD be verified shows up here, add its keyword to
+    _OBJECT_DETECTION_KEYWORDS above."""
+    log.warning("VERIFY driver=%s activity=%s verified=True (PASS-THROUGH — no VLM check; "
+                "add keyword to _OBJECT_DETECTION_KEYWORDS if this should be verified)",
+                driver_id, activity)
     return VerifyResponse(
         verified=True,
         confidence=1.0,

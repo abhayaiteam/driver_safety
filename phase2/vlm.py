@@ -102,23 +102,22 @@ _PROMPTS: dict[str, str] = {
     ),
     "seatbelt": (
         "This is a cropped image of a vehicle driver taken from a dashcam or cabin camera, "
-        "possibly from an angled, side, or partially obstructed view. "
-        "A worn seatbelt looks like a straight or slightly diagonal strap of fabric webbing "
-        "(usually black, grey, or beige, about 5-8 cm wide) running from near one shoulder "
-        "diagonally across the chest down to the opposite hip, sometimes with a metal or "
-        "plastic buckle/latch plate visible where it crosses the body. It often contrasts in "
-        "color or texture with the driver's clothing. At an angle it can look thin, faint, "
-        "low-contrast, or partially cut off by the crop — scan whatever part of the driver's "
-        "chest, shoulder, and lap is visible carefully before concluding no strap is present.\n\n"
-        "Question: Is the driver NOT wearing a seatbelt right now? "
-        "Answer YES (violation, not wearing) only if a meaningful portion of the chest, "
-        "shoulder, or lap area is clearly visible and you are certain no strap, webbing, or "
-        "buckle matching that description appears anywhere in it. "
-        "Answer NO (belt is worn) if ANY part of a strap or buckle is visible anywhere — even "
-        "faint, partial, or at an unusual angle. "
-        "Also answer NO if the chest/shoulder/lap area is too small, dark, or blurry to judge "
-        "reliably (e.g. a tight face-only close-up) — say so explicitly in the reason when "
-        "that's the case.\n\n" + _JSON_INSTRUCTION
+        "possibly angled or partially cropped.\n\n"
+        "Follow these steps in order:\n"
+        "Step 1: Locate the driver's visible torso — shoulder, chest, and lap, whatever is in frame.\n"
+        "Step 2: Look for a diagonal strap of fabric webbing (black, grey, or beige, about "
+        "5-8 cm wide) running from near one shoulder diagonally across the chest toward the "
+        "opposite hip. It may be faint, low-contrast, similar in color to the clothing, or "
+        "partially cut off by the crop — trace slowly across the whole visible torso.\n"
+        "Step 3: Check for a metal or plastic buckle/latch plate where the strap crosses the body.\n\n"
+        "Question: Is the driver NOT wearing a seatbelt right now?\n"
+        "Answer NO (belt is worn) if ANY part of a diagonal strap or buckle is visible — even "
+        "faint, partial, at an unusual angle, or cut off by the crop. A cropped lower torso or "
+        "hidden buckle does NOT invalidate a visible shoulder strap.\n"
+        "Answer YES (violation, not wearing) only if the shoulder-to-chest region is clearly "
+        "visible AND you are certain no strap crosses it anywhere.\n"
+        "If almost none of the torso is visible (e.g. a tight face-only crop), answer NO and "
+        "state that in the reason.\n\n" + _JSON_INSTRUCTION
     ),
 }
 
@@ -173,14 +172,23 @@ _CONFIRM_PROMPTS: dict[str, str] = {
     "seatbelt": (
         "This is a cropped image of a vehicle driver. An automatic system flagged this "
         "driver as NOT WEARING A SEATBELT, but such systems often miss belts that are "
-        "faint, low-contrast, the same color as the clothing, partially hidden by an arm or "
-        "the crop edge, or seen at an unusual angle.\n\n"
-        "Your job is to double-check skeptically. Scan the entire visible chest, shoulder, "
-        "and lap area for ANY trace of a strap, webbing, or buckle. "
-        "Answer YES (confirmed: no seatbelt) only if the chest/shoulder area is clearly "
-        "visible and you are certain there is no strap anywhere. "
-        "Answer NO if any part of a belt is visible, or if the area is too small, dark, or "
-        "blurry to be certain.\n\n" + _JSON_INSTRUCTION
+        "faint, low-contrast, the same color as the clothing, partially hidden by an arm, "
+        "or cut off by the crop edge.\n\n"
+        "Follow these steps in order:\n"
+        "Step 1: Locate the driver's visible shoulder, chest, and lap areas.\n"
+        "Step 2: Trace slowly from each shoulder diagonally down across the chest, hunting "
+        "for ANY continuous strap, webbing edge, or buckle — even a short, faint segment counts.\n"
+        "Step 3: Decide based ONLY on whether a strap is visible in the parts of the torso "
+        "you CAN see.\n\n"
+        "Answer NO (belt IS worn, alert is a false alarm) if any trace of a strap or buckle "
+        "is visible anywhere.\n"
+        "IMPORTANT: image cropping is NOT evidence either way. Do NOT mention cropping as "
+        "your deciding factor — a cropped lower torso, a hidden buckle, or a partial view "
+        "does not mean the belt is absent, and does not excuse skipping the strap search.\n"
+        "Answer YES (confirmed: no seatbelt) only if the shoulder and chest are clearly "
+        "visible and you are certain no strap crosses them anywhere.\n"
+        "Only if almost no torso is visible at all should you answer NO for visibility "
+        "reasons, and say so explicitly.\n\n" + _JSON_INSTRUCTION
     ),
 }
 

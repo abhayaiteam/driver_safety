@@ -8,6 +8,10 @@ Pipeline per detection:
                           → an independent re-check framed to hunt for false positives
   Final verdict           → verified only if BOTH passes agree; confidence = min(both)
 
+Seatbelt is asked as the POSITIVE question ("is the belt worn?") because VLMs
+handle negated questions badly; the answer is inverted in code so that
+verified=true still means "violation confirmed" throughout the pipeline.
+
 Never raises — returns verified=False, confidence=0.0 on any error.
 """
 
@@ -32,6 +36,7 @@ _JSON_INSTRUCTION = (
 # ── Pass 1: strict detection prompts ─────────────────────────────────────────
 # Every prompt follows the same rule: YES requires the object/state to be
 # CLEARLY identifiable; anything ambiguous or uncertain is NO.
+# NOTE: seatbelt asks the POSITIVE question (belt worn?) — inverted in code.
 
 _PROMPTS: dict[str, str] = {
     "phone": (
@@ -110,14 +115,13 @@ _PROMPTS: dict[str, str] = {
         "opposite hip. It may be faint, low-contrast, similar in color to the clothing, or "
         "partially cut off by the crop — trace slowly across the whole visible torso.\n"
         "Step 3: Check for a metal or plastic buckle/latch plate where the strap crosses the body.\n\n"
-        "Question: Is the driver NOT wearing a seatbelt right now?\n"
-        "Answer NO (belt is worn) if ANY part of a diagonal strap or buckle is visible — even "
-        "faint, partial, at an unusual angle, or cut off by the crop. A cropped lower torso or "
-        "hidden buckle does NOT invalidate a visible shoulder strap.\n"
-        "Answer YES (violation, not wearing) only if the shoulder-to-chest region is clearly "
-        "visible AND you are certain no strap crosses it anywhere.\n"
-        "If almost none of the torso is visible (e.g. a tight face-only crop), answer NO and "
-        "state that in the reason.\n\n" + _JSON_INSTRUCTION
+        "Question: Is the driver WEARING a seatbelt?\n"
+        "Answer YES (verified=true) if ANY part of a diagonal strap or buckle is visible — "
+        "even faint, partial, at an unusual angle, or cut off by the crop.\n"
+        "Answer NO (verified=false) only if the shoulder-to-chest region is clearly visible "
+        "AND you are certain no strap crosses it anywhere.\n"
+        "If almost none of the torso is visible (e.g. a tight face-only crop), answer YES "
+        "and state that visibility was insufficient in the reason.\n\n" + _JSON_INSTRUCTION
     ),
 }
 
@@ -170,25 +174,20 @@ _CONFIRM_PROMPTS: dict[str, str] = {
         "Otherwise answer NO.\n\n" + _JSON_INSTRUCTION
     ),
     "seatbelt": (
-        "This is a cropped image of a vehicle driver. An automatic system flagged this "
-        "driver as NOT WEARING A SEATBELT, but such systems often miss belts that are "
-        "faint, low-contrast, the same color as the clothing, partially hidden by an arm, "
-        "or cut off by the crop edge.\n\n"
+        "This is a cropped image of a vehicle driver. An automatic system believes this "
+        "driver has no seatbelt on, but such systems often miss belts that are faint, "
+        "low-contrast, the same color as the clothing, partially hidden by an arm, or cut "
+        "off by the crop edge.\n\n"
         "Follow these steps in order:\n"
         "Step 1: Locate the driver's visible shoulder, chest, and lap areas.\n"
         "Step 2: Trace slowly from each shoulder diagonally down across the chest, hunting "
-        "for ANY continuous strap, webbing edge, or buckle — even a short, faint segment counts.\n"
-        "Step 3: Decide based ONLY on whether a strap is visible in the parts of the torso "
-        "you CAN see.\n\n"
-        "Answer NO (belt IS worn, alert is a false alarm) if any trace of a strap or buckle "
-        "is visible anywhere.\n"
-        "IMPORTANT: image cropping is NOT evidence either way. Do NOT mention cropping as "
-        "your deciding factor — a cropped lower torso, a hidden buckle, or a partial view "
-        "does not mean the belt is absent, and does not excuse skipping the strap search.\n"
-        "Answer YES (confirmed: no seatbelt) only if the shoulder and chest are clearly "
-        "visible and you are certain no strap crosses them anywhere.\n"
-        "Only if almost no torso is visible at all should you answer NO for visibility "
-        "reasons, and say so explicitly.\n\n" + _JSON_INSTRUCTION
+        "for ANY continuous strap, webbing edge, or buckle — even a short, faint segment counts.\n\n"
+        "Question: Is the driver WEARING a seatbelt?\n"
+        "Answer YES (verified=true) if any trace of a strap or buckle is visible anywhere, "
+        "or if too little of the torso is visible to judge.\n"
+        "Answer NO (verified=false) only if the shoulder and chest are clearly visible and "
+        "you are certain no strap crosses them anywhere. "
+        "Image cropping is NOT evidence of a missing belt.\n\n" + _JSON_INSTRUCTION
     ),
 }
 
@@ -208,9 +207,26 @@ _GENERIC_CONFIRM_PROMPT = (
     "NO.\n\n" + _JSON_INSTRUCTION
 )
 
+# ── Inverted activities ──────────────────────────────────────────────────────
+# The seatbelt prompts ask the POSITIVE question ("is the belt worn?") because
+# VLMs answer negated questions unreliably (they find the strap, then answer
+# YES to "not wearing"). The pipeline's contract is verified=true ⇒ violation
+# confirmed, so we flip the parsed answer here. Only successfully parsed
+# answers are inverted — error/unparseable fallbacks stay verified=False so a
+# failure can never turn into a confirmed violation.
+
+_INVERTED_ACTIVITIES = {"seatbelt"}
+
+
+def _apply_inversion(activity: str, result: dict) -> dict:
+    if activity in _INVERTED_ACTIVITIES:
+        result["verified"] = not result["verified"]
+    return result
+
+
 # ── Reason-consistency gate ──────────────────────────────────────────────────
 # For object-presence classes, a verified=true answer must actually mention the
-# object in its reason, and must not simultaneously deny it. Catches LLaVA's
+# object in its reason, and must not simultaneously deny it. Catches the VLM's
 # habit of returning verified=true with a reason like "no phone is visible".
 # Not applied to seatbelt/drowsy (their positive reason legitimately describes
 # an ABSENCE, e.g. "no strap visible").
@@ -268,7 +284,7 @@ def _parse(raw: str) -> dict | None:
 
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
     """One VLM round-trip. On JSON-parse failure, falls back to a conservative
-    heuristic that can never confirm a detection on its own (verified=False)."""
+    result that can never confirm a detection on its own (verified=False)."""
     response = chat(
         model=model,
         messages=[{
@@ -283,10 +299,12 @@ def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str)
 
     result = _parse(raw)
     if result:
-        return result
+        # Inversion applies ONLY to successfully parsed answers.
+        return _apply_inversion(activity, result)
 
     # JSON parse failed — plain-text fallback. Be conservative: an unparseable
-    # answer is never allowed to confirm an alert by itself.
+    # answer is never allowed to confirm an alert by itself. Deliberately NOT
+    # inverted (inverting a failure would fabricate a confirmed violation).
     log.warning("VLM JSON parse failed [%s/%s]; treating as NOT verified. raw=%s",
                 activity, pass_name, raw[:120])
     return {"verified": False, "confidence": 0.0,

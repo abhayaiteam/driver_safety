@@ -57,12 +57,24 @@ def _is_disabled_activity(activity: str) -> bool:
 
 
 _ACTIVITY_DISPLAY_NAMES: dict[str, str] = {
-    "seatbelt": "Seatbelt Not Worn",
+    # static labels for canonical activities (seatbelt is handled dynamically
+    # in _display_activity because its label depends on the outcome)
 }
 _API_KEY         = os.getenv("API_KEY", "dev-key-change-me")
 _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
 
 router = APIRouter()
+
+
+def _display_activity(canonical: str, original: str, verified: bool) -> str:
+    """Human-readable activity label for the response.
+    For seatbelt the label states the OUTCOME (verified=true means the
+    violation was confirmed → 'Seatbelt Not Worn'; verified=false means the
+    belt was seen or the violation could not be confirmed → 'Seatbelt Worn').
+    All other activities keep their original / mapped label."""
+    if canonical == "seatbelt":
+        return "Seatbelt Not Worn" if verified else "Seatbelt Worn"
+    return _ACTIVITY_DISPLAY_NAMES.get(canonical, original)
 
 
 def require_api_key(
@@ -145,7 +157,7 @@ async def verify_upload(
     return VerifyResponse(
         verified=verified,
         confidence=result["confidence"],
-        activity=_ACTIVITY_DISPLAY_NAMES.get(canonical, activity),
+        activity=_display_activity(canonical, activity, verified),
         reason=result["reason"],
     )
 
@@ -184,7 +196,7 @@ async def verify_json(
     return VerifyResponse(
         verified=verified,
         confidence=result["confidence"],
-        activity=_ACTIVITY_DISPLAY_NAMES.get(canonical, body.activity),
+        activity=_display_activity(canonical, body.activity, verified),
         reason=result["reason"],
     )
 

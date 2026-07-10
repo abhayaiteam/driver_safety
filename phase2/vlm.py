@@ -287,24 +287,23 @@ def _parse(raw: str) -> dict | None:
         return None
 
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
-    """One VLM round-trip with one retry. On repeated parse failure, falls back
-    to a conservative result that can never confirm a detection (verified=False)."""
-    for attempt in range(2):
+    raw = ""
+    for attempt in range(3):                       # was 2 → 3 retries
         response = chat(
             model=model,
             messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
             format="json",
-            options={"temperature": 0.0, "num_predict": 512},
+            options={"temperature": 0.0 if attempt == 0 else 0.2,  # nudge off a stuck empty gen
+                     "num_predict": 768},
         )
-        raw = response["message"]["content"].strip()
-        log.debug("VLM raw [%s/%s attempt %d]: %s", activity, pass_name, attempt, raw[:250])
-        result = _parse(raw)
-        if result:
-            return _apply_inversion(activity, result)
-        log.warning("VLM parse failed [%s/%s attempt %d]: %s",
-                    activity, pass_name, attempt, raw[:150])
+        raw = (response.get("message", {}).get("content") or "").strip()
+        log.debug("VLM raw [%s/%s a%d]: %s", activity, pass_name, attempt, raw[:250])
+        if raw:
+            result = _parse(raw)
+            if result:
+                return _apply_inversion(activity, result)
+        log.warning("VLM parse/empty fail [%s/%s a%d]: %r", activity, pass_name, attempt, raw[:150])
 
-    # both attempts failed — conservative, never confirms (not inverted)
     return {"verified": False, "confidence": 0.0,
             "reason": f"unparseable_vlm_output: {raw[:100]}"}
 

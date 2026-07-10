@@ -102,18 +102,16 @@ def _resolve_object_detection_activity(activity: str) -> Optional[str]:
 
 
 def _pass_through(activity: str, driver_id: str) -> VerifyResponse:
-    """Non object-detection activities skip the VLM double-check and are accepted as-is.
-    Logged as WARNING so anything bypassing verification is always visible in the log —
-    if a label that SHOULD be verified shows up here, add its keyword to
-    _OBJECT_DETECTION_KEYWORDS above."""
-    log.warning("VERIFY driver=%s activity=%s verified=True (PASS-THROUGH — no VLM check; "
-                "add keyword to _OBJECT_DETECTION_KEYWORDS if this should be verified)",
+    """Unknown/non-object-detection activity — cannot verify it, so do NOT alert.
+    Conservative: only recognized+verified activities pass through as alerts."""
+    log.warning("VERIFY driver=%s activity=%s verified=False (UNRECOGNIZED activity — "
+                "not verified, no alert. Add keyword to _OBJECT_DETECTION_KEYWORDS.)",
                 driver_id, activity)
     return VerifyResponse(
-        verified=True,
-        confidence=1.0,
+        verified=False,
+        confidence=0.0,
         activity=activity,
-        reason="Not an object-detection activity — passed through without VLM check.",
+        reason=f"Unrecognized activity '{activity}' — not verified, no alert raised.",
     )
 
 

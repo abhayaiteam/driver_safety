@@ -265,11 +265,16 @@ def _reason_contradicts(activity: str, reason: str) -> bool:
 
 def _parse(raw: str) -> dict | None:
     cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip()
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if not match:
+    # take the LAST balanced {...} block (skips any preamble/thinking text)
+    matches = re.findall(r"\{[^{}]*\}", cleaned, re.DOTALL)
+    candidate = matches[-1] if matches else None
+    if candidate is None:
+        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        candidate = m.group() if m else None
+    if candidate is None:
         return None
     try:
-        data = json.loads(match.group())
+        data = json.loads(candidate)
         verified = data.get("verified", False)
         if isinstance(verified, str):
             verified = verified.strip().lower() in ("true", "yes", "1")
@@ -281,32 +286,25 @@ def _parse(raw: str) -> dict | None:
     except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
-
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
-    """One VLM round-trip. On JSON-parse failure, falls back to a conservative
-    result that can never confirm a detection on its own (verified=False)."""
-    response = chat(
-        model=model,
-        messages=[{
-            "role":    "user",
-            "content": prompt,
-            "images":  [image_b64],
-        }],
-        options={"temperature": 0.0, "num_predict": 160},
-    )
-    raw = response["message"]["content"].strip()
-    log.debug("VLM raw [%s/%s]: %s", activity, pass_name, raw[:200])
+    """One VLM round-trip with one retry. On repeated parse failure, falls back
+    to a conservative result that can never confirm a detection (verified=False)."""
+    for attempt in range(2):
+        response = chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
+            format="json",
+            options={"temperature": 0.0, "num_predict": 512},
+        )
+        raw = response["message"]["content"].strip()
+        log.debug("VLM raw [%s/%s attempt %d]: %s", activity, pass_name, attempt, raw[:250])
+        result = _parse(raw)
+        if result:
+            return _apply_inversion(activity, result)
+        log.warning("VLM parse failed [%s/%s attempt %d]: %s",
+                    activity, pass_name, attempt, raw[:150])
 
-    result = _parse(raw)
-    if result:
-        # Inversion applies ONLY to successfully parsed answers.
-        return _apply_inversion(activity, result)
-
-    # JSON parse failed — plain-text fallback. Be conservative: an unparseable
-    # answer is never allowed to confirm an alert by itself. Deliberately NOT
-    # inverted (inverting a failure would fabricate a confirmed violation).
-    log.warning("VLM JSON parse failed [%s/%s]; treating as NOT verified. raw=%s",
-                activity, pass_name, raw[:120])
+    # both attempts failed — conservative, never confirms (not inverted)
     return {"verified": False, "confidence": 0.0,
             "reason": f"unparseable_vlm_output: {raw[:100]}"}
 

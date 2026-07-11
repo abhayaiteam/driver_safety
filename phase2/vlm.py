@@ -279,7 +279,7 @@ def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str)
             messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
             format="json",
             options={"temperature": 0.0 if attempt == 0 else 0.2,
-                     "num_predict": 768},
+                     "num_predict": 150},
         )
         raw = (response.get("message", {}).get("content") or "").strip()
         log.debug("VLM raw [%s/%s a%d]: %s", activity, pass_name, attempt, raw[:250])

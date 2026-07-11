@@ -335,64 +335,28 @@ def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str)
             "reason": f"unparseable_vlm_output: {raw[:100]}"}
 
 
-def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
-    """
-    Two-pass cross-checked verification with a high-confidence fast path.
-
-    Pass 1: strict detection. NO or contradictory reason → rejected immediately.
-    Fast path: pass-1 confidence ≥ 0.90 and reason gate passed → accept, skip pass 2.
-    Pass 2: for borderline positives (< 0.90), skeptical re-check; both must agree.
-
-    Never raises — returns verified=False, confidence=0.0 on any error.
-    """
-    prompt  = _PROMPTS.get(activity) or _GENERIC_PROMPT.format(activity=activity)
-    confirm = _CONFIRM_PROMPTS.get(activity) or _GENERIC_CONFIRM_PROMPT.format(activity=activity)
+def verify(activity: str, image_b64: str, model: str = "qwen3-vl:8b") -> dict:
+    """Single-pass verification: YOLO already detected; the VLM confirms or rejects.
+    One VLM call — if it clearly sees the violation above threshold, pass; else reject."""
+    prompt = _PROMPTS.get(activity) or _GENERIC_PROMPT.format(activity=activity)
 
     try:
-        # ── Pass 1: strict detection ─────────────────────────────────────
-        first = _ask(prompt, image_b64, model, activity, "pass1")
+        result = _ask(prompt, image_b64, model, activity, "verify")
 
-        if not first["verified"]:
-            return first
+        if not result["verified"]:
+            return result
 
-        # Reason-consistency gate
-        if _reason_contradicts(activity, first["reason"]):
-            log.info("VLM verdict overturned by reason-consistency gate [%s]: %r",
-                     activity, first["reason"])
+        # Reason must actually evidence the object (catches "verified but reason denies it")
+        if _reason_contradicts(activity, result["reason"]):
+            log.info("VLM verdict overturned by reason gate [%s]: %r", activity, result["reason"])
             return {
                 "verified":   False,
-                "confidence": min(first["confidence"], 0.3),
-                "reason":     f"rejected (reason contradicts verdict): {first['reason']}",
+                "confidence": min(result["confidence"], 0.3),
+                "reason":     f"rejected (reason contradicts verdict): {result['reason']}",
             }
 
-        # ── Fast path: highly confident pass 1 → skip pass 2 (halves latency) ─
-        if first["confidence"] >= 0.90:
-            log.info("VLM fast-path accept [%s] conf=%.2f (skipped pass-2): %r",
-                     activity, first["confidence"], first["reason"])
-            return {
-                "verified":   True,
-                "confidence": first["confidence"],
-                "reason":     first["reason"],
-            }
+        return result
 
-        # ── Pass 2: skeptical confirmation (borderline positives only) ───
-        second = _ask(confirm, image_b64, model, activity, "pass2-confirm")
-
-        if not second["verified"] or _reason_contradicts(activity, second["reason"]):
-            log.info("VLM detection rejected on confirmation pass [%s]: %r",
-                     activity, second["reason"])
-            return {
-                "verified":   False,
-                "confidence": min(first["confidence"], second["confidence"]),
-                "reason":     f"failed skeptical re-check: {second['reason'] or first['reason']}",
-            }
-
-        return {
-            "verified":   True,
-            "confidence": min(first["confidence"], second["confidence"]),
-            "reason":     second["reason"] or first["reason"],
-        }
-
-    except (ResponseError, ConnectionError, TimeoutError, ValueError) as exc:
+    except (ConnectionError, TimeoutError, ValueError) as exc:
         log.error("VLM call failed for '%s': %s", activity, exc)
         return {"verified": False, "confidence": 0.0, "reason": f"vlm_error: {exc}"}

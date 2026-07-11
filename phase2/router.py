@@ -30,30 +30,19 @@ _OBJECT_DETECTION_KEYWORDS: dict[str, str] = {
     "smoke":      "cigarette",
     "vape":       "cigarette",
     "vaping":     "cigarette",
-    # "eating":     "food",      # disabled — not needed right now
-    # "food":       "food",      # disabled — not needed right now
-    # "drinking":   "drink",     # disabled — not needed right now
-    # "drink":      "drink",     # disabled — not needed right now
+    "eating":     "food",
+    "food":       "food",
+    "drinking":   "drink",
+    "drink":      "drink",
     "drowsy":     "drowsy",
     "drowsiness": "drowsy",
     "sleepy":     "drowsy",
-    "seatbelt":       "seatbelt",
-    "seat belt":      "seatbelt",
-    "seat_belt":      "seatbelt",
+    "seatbelt":        "seatbelt",
+    "seat belt":       "seatbelt",
+    "seat_belt":       "seatbelt",
     "fasten seatbelt": "seatbelt",
-    "buckle":         "seatbelt",
+    "buckle":          "seatbelt",
 }
-
-# Food/drink detection is temporarily disabled (see commented entries above). Matched
-# labels are suppressed (verified=False) here rather than falling through to
-# _pass_through's default verified=True, so they don't show up as confirmed alerts
-# while disabled. Re-enable by uncommenting the entries above and deleting this block.
-_DISABLED_KEYWORDS = ("eating", "food", "drinking", "drink")
-
-
-def _is_disabled_activity(activity: str) -> bool:
-    lowered = activity.strip().lower()
-    return any(keyword in lowered for keyword in _DISABLED_KEYWORDS)
 
 
 _ACTIVITY_DISPLAY_NAMES: dict[str, str] = {
@@ -113,6 +102,7 @@ def _pass_through(activity: str, driver_id: str) -> VerifyResponse:
         reason="Passed through as detected (no VLM verification for this activity).",
     )
 
+
 @router.post(
     "/verify/upload",
     response_model=VerifyResponse,
@@ -126,16 +116,6 @@ async def verify_upload(
     driver_id: str        = Form(default="unknown"),
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
-    if _is_disabled_activity(activity):
-        log.info("VERIFY driver=%s activity=%s verified=False (food/drink detection disabled)",
-                  driver_id, activity)
-        return VerifyResponse(
-            verified=False,
-            confidence=0.0,
-            activity=activity,
-            reason="Food/drink verification is temporarily disabled.",
-        )
-
     canonical = _resolve_object_detection_activity(activity)
     if canonical is None:
         return _pass_through(activity, driver_id)
@@ -169,16 +149,6 @@ async def verify_json(
     body: VerifyJsonRequest,
     _auth: None = Depends(require_api_key),
 ) -> VerifyResponse:
-    if _is_disabled_activity(body.activity):
-        log.info("VERIFY driver=%s activity=%s verified=False (food/drink detection disabled)",
-                  body.driver_id, body.activity)
-        return VerifyResponse(
-            verified=False,
-            confidence=0.0,
-            activity=body.activity,
-            reason="Food/drink verification is temporarily disabled.",
-        )
-
     canonical = _resolve_object_detection_activity(body.activity)
     if canonical is None:
         return _pass_through(body.activity, body.driver_id)

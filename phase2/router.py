@@ -6,7 +6,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
-
+import io
+from PIL import Image
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 import sys
@@ -54,6 +55,24 @@ _executor        = ThreadPoolExecutor(max_workers=cfg.VLM_WORKERS)
 
 router = APIRouter()
 
+def _shrink_image(raw: bytes, max_side: int = 768) -> bytes:
+    """Downscale large frames so the VLM vision encoder isn't processing a
+    full 1080p image — the dominant cost in VLM latency. 768px max side keeps
+    plenty of detail for driver-activity verification."""
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = img.convert("RGB")
+        w, h = img.size
+        if max(w, h) <= max_side:
+            return raw                          # already small, don't re-encode
+        scale = max_side / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=88)
+        return out.getvalue()
+    except Exception as e:
+        log.warning("image shrink failed (%s), using original", e)
+        return raw
 
 def _display_activity(canonical: str, original: str, verified: bool) -> str:
     """Human-readable activity label for the response.
@@ -124,7 +143,9 @@ async def verify_upload(
     if not raw:
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
 
+    raw = _shrink_image(raw)
     result = await _run_verify(canonical, base64.b64encode(raw).decode())
+
     verified = result["verified"] and result["confidence"] >= cfg.VLM_ALERT_THRESHOLD
 
     log.info("VERIFY driver=%s activity=%s verified=%s conf=%.2f reason=%r",
@@ -153,7 +174,12 @@ async def verify_json(
     if canonical is None:
         return _pass_through(body.activity, body.driver_id)
 
-    result = await _run_verify(canonical, body.image_b64)
+    try:
+        shrunk = _shrink_image(base64.b64decode(body.image_b64))
+        image_b64 = base64.b64encode(shrunk).decode()
+    except Exception:
+        image_b64 = body.image_b64
+    result = await _run_verify(canonical, image_b64)
     verified = result["verified"] and result["confidence"] >= cfg.VLM_ALERT_THRESHOLD
 
     log.info("VERIFY driver=%s activity=%s verified=%s conf=%.2f reason=%r",

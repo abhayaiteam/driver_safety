@@ -18,6 +18,8 @@ Never raises — returns verified=False, confidence=0.0 on any error.
 import json
 import logging
 import re
+import time  
+
 
 from ollama import ResponseError, chat
 
@@ -268,21 +270,21 @@ def _parse(raw: str) -> dict | None:
     except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
-
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
-    """One VLM round-trip with up to 2 attempts. On repeated failure, returns a
-    conservative result that never confirms a detection (verified=False)."""
     raw = ""
     for attempt in range(2):
+        t0 = time.perf_counter()
         response = chat(
             model=model,
             messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
             format="json",
             options={"temperature": 0.0 if attempt == 0 else 0.2,
-                     "num_predict": 150},
+                     "num_predict": 256},
         )
+        dt = time.perf_counter() - t0
         raw = (response.get("message", {}).get("content") or "").strip()
-        log.debug("VLM raw [%s/%s a%d]: %s", activity, pass_name, attempt, raw[:250])
+        log.info("VLM call [%s/%s a%d] took %.1fs, got %d chars: %s",
+                 activity, pass_name, attempt, dt, len(raw), raw[:120])
         if raw:
             result = _parse(raw)
             if result:

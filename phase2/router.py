@@ -102,18 +102,16 @@ def _resolve_object_detection_activity(activity: str) -> Optional[str]:
 
 
 def _pass_through(activity: str, driver_id: str) -> VerifyResponse:
-    """Unknown/non-object-detection activity — cannot verify it, so do NOT alert.
-    Conservative: only recognized+verified activities pass through as alerts."""
-    log.warning("VERIFY driver=%s activity=%s verified=False (UNRECOGNIZED activity — "
-                "not verified, no alert. Add keyword to _OBJECT_DETECTION_KEYWORDS.)",
-                driver_id, activity)
+    """Activity with no VLM verifier (e.g. distraction from Flutter) — trust the
+    upstream detection and pass through to the backend as an alert, no VLM check."""
+    log.info("VERIFY driver=%s activity=%s verified=True (pass-through — no VLM check, "
+             "trusting upstream detection)", driver_id, activity)
     return VerifyResponse(
-        verified=False,
-        confidence=0.0,
+        verified=True,
+        confidence=1.0,
         activity=activity,
-        reason=f"Unrecognized activity '{activity}' — not verified, no alert raised.",
+        reason="Passed through as detected (no VLM verification for this activity).",
     )
-
 
 @router.post(
     "/verify/upload",

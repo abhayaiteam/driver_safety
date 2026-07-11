@@ -174,12 +174,7 @@ async def verify_json(
     if canonical is None:
         return _pass_through(body.activity, body.driver_id)
 
-    try:
-        shrunk = _shrink_image(base64.b64decode(body.image_b64))
-        image_b64 = base64.b64encode(shrunk).decode()
-    except Exception:
-        image_b64 = body.image_b64
-    result = await _run_verify(canonical, image_b64)
+    result = await _run_verify(canonical, body.image_b64)
     verified = result["verified"] and result["confidence"] >= cfg.VLM_ALERT_THRESHOLD
 
     log.info("VERIFY driver=%s activity=%s verified=%s conf=%.2f reason=%r",

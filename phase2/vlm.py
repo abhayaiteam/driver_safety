@@ -1,16 +1,16 @@
 """
-VLM verification via Ollama — two-pass cross-checked version.
+VLM verification via Ollama — two-pass cross-checked version, with a fast-path
+that skips pass-2 when pass-1 is highly confident (halves latency on clear cases).
 
 Pipeline per detection:
   Pass 1 (strict prompt)  → must answer verified=true with an evidence-bearing reason
   Reason consistency gate → reason must actually mention the object; contradictions flip to false
-  Pass 2 (skeptical confirmation prompt, only if pass 1 was positive)
-                          → an independent re-check framed to hunt for false positives
-  Final verdict           → verified only if BOTH passes agree; confidence = min(both)
+  Fast path               → if pass-1 confidence ≥ 0.90 and passed the gate, accept immediately
+  Pass 2 (skeptical)      → for borderline positives (< 0.90), independent re-check
+  Final verdict           → verified only if both agree; confidence = min(both)
 
-Seatbelt is asked as the POSITIVE question ("is the belt worn?") because VLMs
-handle negated questions badly; the answer is inverted in code so that
-verified=true still means "violation confirmed" throughout the pipeline.
+Seatbelt is asked as the POSITIVE question ("is the belt worn?") and inverted in
+code so verified=true always means "violation confirmed".
 
 Never raises — returns verified=False, confidence=0.0 on any error.
 """
@@ -34,9 +34,6 @@ _JSON_INSTRUCTION = (
 )
 
 # ── Pass 1: strict detection prompts ─────────────────────────────────────────
-# Every prompt follows the same rule: YES requires the object/state to be
-# CLEARLY identifiable; anything ambiguous or uncertain is NO.
-# NOTE: seatbelt asks the POSITIVE question (belt worn?) — inverted in code.
 
 _PROMPTS: dict[str, str] = {
     "phone": (
@@ -125,7 +122,7 @@ _PROMPTS: dict[str, str] = {
     ),
 }
 
-# ── Pass 2: skeptical confirmation prompts (run only after a positive pass 1) ─
+# ── Pass 2: skeptical confirmation prompts ───────────────────────────────────
 
 _CONFIRM_PROMPTS: dict[str, str] = {
     "phone": (
@@ -208,12 +205,6 @@ _GENERIC_CONFIRM_PROMPT = (
 )
 
 # ── Inverted activities ──────────────────────────────────────────────────────
-# The seatbelt prompts ask the POSITIVE question ("is the belt worn?") because
-# VLMs answer negated questions unreliably (they find the strap, then answer
-# YES to "not wearing"). The pipeline's contract is verified=true ⇒ violation
-# confirmed, so we flip the parsed answer here. Only successfully parsed
-# answers are inverted — error/unparseable fallbacks stay verified=False so a
-# failure can never turn into a confirmed violation.
 
 _INVERTED_ACTIVITIES = {"seatbelt"}
 
@@ -225,11 +216,6 @@ def _apply_inversion(activity: str, result: dict) -> dict:
 
 
 # ── Reason-consistency gate ──────────────────────────────────────────────────
-# For object-presence classes, a verified=true answer must actually mention the
-# object in its reason, and must not simultaneously deny it. Catches the VLM's
-# habit of returning verified=true with a reason like "no phone is visible".
-# Not applied to seatbelt/drowsy (their positive reason legitimately describes
-# an ABSENCE, e.g. "no strap visible").
 
 _EVIDENCE_WORDS: dict[str, tuple[str, ...]] = {
     "phone":     ("phone", "mobile", "smartphone", "cell", "device"),
@@ -247,15 +233,12 @@ def _reason_contradicts(activity: str, reason: str) -> bool:
     lower = reason.lower()
     mentioned = [w for w in words if w in lower]
     if not mentioned:
-        # verified=true but the reason never mentions the object at all
         return True
-    # object mentioned, but in a negated form: "no phone", "not holding a phone", ...
     for w in mentioned:
         for neg in ("no ", "not ", "without ", "isn't ", "is not ", "cannot see", "can't see",
                     "doesn't ", "does not ", "unable to see", "absence of "):
             idx = lower.find(neg)
             while idx != -1:
-                # negation within ~40 chars before the evidence word counts as denial
                 w_idx = lower.find(w, idx)
                 if w_idx != -1 and 0 <= w_idx - idx <= 40:
                     return True
@@ -265,7 +248,6 @@ def _reason_contradicts(activity: str, reason: str) -> bool:
 
 def _parse(raw: str) -> dict | None:
     cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip()
-    # take the LAST balanced {...} block (skips any preamble/thinking text)
     matches = re.findall(r"\{[^{}]*\}", cleaned, re.DOTALL)
     candidate = matches[-1] if matches else None
     if candidate is None:
@@ -286,14 +268,17 @@ def _parse(raw: str) -> dict | None:
     except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
+
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
+    """One VLM round-trip with up to 2 attempts. On repeated failure, returns a
+    conservative result that never confirms a detection (verified=False)."""
     raw = ""
-    for attempt in range(3):                       # was 2 → 3 retries
+    for attempt in range(2):
         response = chat(
             model=model,
             messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
             format="json",
-            options={"temperature": 0.0 if attempt == 0 else 0.2,  # nudge off a stuck empty gen
+            options={"temperature": 0.0 if attempt == 0 else 0.2,
                      "num_predict": 768},
         )
         raw = (response.get("message", {}).get("content") or "").strip()
@@ -310,12 +295,11 @@ def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str)
 
 def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
     """
-    Two-pass cross-checked verification.
+    Two-pass cross-checked verification with a high-confidence fast path.
 
-    Pass 1: strict detection prompt. If it answers NO (or its reason contradicts
-    the positive verdict), the detection is rejected immediately.
-    Pass 2: independent skeptical confirmation. The detection passes only if
-    BOTH passes answer YES. Final confidence = min of the two passes.
+    Pass 1: strict detection. NO or contradictory reason → rejected immediately.
+    Fast path: pass-1 confidence ≥ 0.90 and reason gate passed → accept, skip pass 2.
+    Pass 2: for borderline positives (< 0.90), skeptical re-check; both must agree.
 
     Never raises — returns verified=False, confidence=0.0 on any error.
     """
@@ -329,7 +313,7 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
         if not first["verified"]:
             return first
 
-        # Reason-consistency gate: verified=true must be backed by the reason
+        # Reason-consistency gate
         if _reason_contradicts(activity, first["reason"]):
             log.info("VLM verdict overturned by reason-consistency gate [%s]: %r",
                      activity, first["reason"])
@@ -339,7 +323,17 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
                 "reason":     f"rejected (reason contradicts verdict): {first['reason']}",
             }
 
-        # ── Pass 2: skeptical confirmation ───────────────────────────────
+        # ── Fast path: highly confident pass 1 → skip pass 2 (halves latency) ─
+        if first["confidence"] >= 0.90:
+            log.info("VLM fast-path accept [%s] conf=%.2f (skipped pass-2): %r",
+                     activity, first["confidence"], first["reason"])
+            return {
+                "verified":   True,
+                "confidence": first["confidence"],
+                "reason":     first["reason"],
+            }
+
+        # ── Pass 2: skeptical confirmation (borderline positives only) ───
         second = _ask(confirm, image_b64, model, activity, "pass2-confirm")
 
         if not second["verified"] or _reason_contradicts(activity, second["reason"]):
@@ -351,7 +345,6 @@ def verify(activity: str, image_b64: str, model: str = "llava:7b") -> dict:
                 "reason":     f"failed skeptical re-check: {second['reason'] or first['reason']}",
             }
 
-        # Both passes agree → confirmed
         return {
             "verified":   True,
             "confidence": min(first["confidence"], second["confidence"]),

@@ -208,41 +208,42 @@ _GENERIC_CONFIRM_PROMPT = (
     "NO.\n\n" + _JSON_INSTRUCTION
 )
 
-
-
-_OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434").rstrip("/") + "/api/generate"
+_OLLAMA_BASE = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434").rstrip("/")
 
 
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
-    """One VLM round-trip via Ollama's /api/generate (the /api/chat path returns
-    empty responses with qwen3-vl). Up to 2 attempts; conservative fallback."""
     raw = ""
     for attempt in range(2):
         t0 = time.perf_counter()
         try:
-            resp = requests.post(_OLLAMA_URL, json={
-                "model":   model,
-                "prompt":  prompt,
-                "images":  [image_b64],
-                "stream":  False,
-                "options": {"temperature": 0.0 if attempt == 0 else 0.2,
-                            "num_predict": 256},
-            }, timeout=60)
-            raw = (resp.json().get("response") or "").strip()
+            resp = requests.post(
+                f"{_OLLAMA_BASE}/api/generate",
+                json={
+                    "model":   model,
+                    "prompt":  prompt,
+                    "images":  [image_b64],
+                    "stream":  False,
+                    "options": {"temperature": 0.0 if attempt == 0 else 0.3,
+                                "num_predict": 300},
+                },
+                timeout=90,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            raw = (data.get("response") or "").strip()
         except Exception as e:
-            log.warning("VLM request failed [%s/%s a%d]: %s", activity, pass_name, attempt, e)
+            log.warning("VLM request error [%s/%s a%d]: %s", activity, pass_name, attempt, e)
             raw = ""
         dt = time.perf_counter() - t0
-        log.info("VLM call [%s/%s a%d] took %.1fs, got %d chars: %s",
-                 activity, pass_name, attempt, dt, len(raw), raw[:120])
+        log.info("VLM call [%s/%s a%d] took %.1fs, %d chars: %s",
+                 activity, pass_name, attempt, dt, len(raw), raw[:100])
         if raw:
             result = _parse(raw)
             if result:
                 return _apply_inversion(activity, result)
-        log.warning("VLM parse/empty fail [%s/%s a%d]: %r", activity, pass_name, attempt, raw[:150])
 
     return {"verified": False, "confidence": 0.0,
-            "reason": f"unparseable_vlm_output: {raw[:100]}"}
+            "reason": f"unparseable_vlm_output: {raw[:80]}"}
 
 # ── Inverted activities ──────────────────────────────────────────────────────
 

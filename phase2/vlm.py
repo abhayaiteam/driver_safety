@@ -271,13 +271,14 @@ def _parse(raw: str) -> dict | None:
         return None
 
 def _ask(prompt: str, image_b64: str, model: str, activity: str, pass_name: str) -> dict:
+    """One VLM round-trip with up to 2 attempts. On repeated failure, returns a
+    conservative result that never confirms a detection (verified=False)."""
     raw = ""
     for attempt in range(2):
         t0 = time.perf_counter()
         response = chat(
             model=model,
             messages=[{"role": "user", "content": prompt, "images": [image_b64]}],
-            format="json",
             options={"temperature": 0.0 if attempt == 0 else 0.2,
                      "num_predict": 256},
         )
